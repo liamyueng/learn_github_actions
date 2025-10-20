@@ -20,7 +20,44 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION }}
+          aws-region: name: Deploy with AWS access keys
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (access keys)
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-west-1
+
+      - name: Verify caller identity
+        run: |
+          echo "== AWS caller identity =="
+          aws sts get-caller-identity
+
+      - name: Verify basic permissions (S3 list example)
+        run: |
+          echo "== Try S3 list for permitted buckets (may fail if no permission) =="
+          aws s3 ls || true
+
+      # 示例：同步静态站点到 S3（取消注释并替换 your-bucket-name）
+      #- name: Sync to S3
+      #  run: |
+      #    aws s3 sync ./public s3://your-bucket-name --delete --acl public-read
 
       - name: Verify caller identity
         run: |
