@@ -1,10 +1,9 @@
-# Updated by @liamyueng — aws-region fixed to us-west-1
-name: Deploy with AWS access keys
+name: Deploy with AWS access keys (debug)
 
 on:
+  workflow_dispatch:
   push:
     branches: [ main ]
-  workflow_dispatch:
 
 permissions:
   contents: read
@@ -23,33 +22,26 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-west-1
 
+      - name: Check env vars existence (no secret values printed)
+        shell: bash
+        run: |
+          echo "== Check AWS env vars set =="
+          if [ -z "${AWS_ACCESS_KEY_ID:-}" ]; then
+            echo "ERROR: AWS_ACCESS_KEY_ID is NOT set"
+            exit 1
+          else
+            echo "OK: AWS_ACCESS_KEY_ID is set"
+          fi
+          if [ -z "${AWS_SECRET_ACCESS_KEY:-}" ]; then
+            echo "ERROR: AWS_SECRET_ACCESS_KEY is NOT set"
+            exit 1
+          else
+            echo "OK: AWS_SECRET_ACCESS_KEY is set"
+          fi
+          echo "AWS_REGION=${AWS_REGION:-<not set>}"  # region value printed (safe)
       - name: Verify caller identity
         run: |
-          echo "== AWS caller identity =="
           aws sts get-caller-identity
-
-      - name: Verify basic permissions (S3 list example)
+      - name: Try S3 list (may fail if user lacks S3 perms)
         run: |
-          echo "== Try S3 list for permitted buckets (may fail if no permission) =="
           aws s3 ls || true
-
-      # === Examples: enable the blocks below as needed and replace placeholders ===
-      # Sync static site to S3:
-      # - name: Sync to S3
-      #   run: |
-      #     aws s3 sync ./public s3://your-bucket-name --delete --acl public-read
-      #
-      # Build and push to ECR:
-      # - name: Login to ECR
-      #   run: |
-      #     aws ecr get-login-password --region us-west-1 | docker login --username AWS --password-stdin 123456789012.dkr.ecr.us-west-1.amazonaws.com
-      #
-      # - name: Build, tag and push image
-      #   run: |
-      #     IMAGE_URI=123456789012.dkr.ecr.us-west-1.amazonaws.com/my-service
-      #     docker build -t $IMAGE_URI:${GITHUB_SHA::8} .
-      #     docker push $IMAGE_URI:${GITHUB_SHA::8}
-      #
-      # - name: Force ECS service update
-      #   run: |
-      #     aws ecs update-service --cluster my-cluster --service my-service --force-new-deployment
