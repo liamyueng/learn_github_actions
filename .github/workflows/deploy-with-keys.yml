@@ -1,4 +1,4 @@
-name: Deploy with AWS access keys (debug)
+name: Debug AWS secrets availability
 
 on:
   workflow_dispatch:
@@ -9,39 +9,66 @@ permissions:
   contents: read
 
 jobs:
-  deploy:
+  debug:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Configure AWS credentials (access keys)
+      - name: Print run context (non-sensitive)
+        run: |
+          echo "GITHUB_ACTOR=$GITHUB_ACTOR"
+          echo "GITHUB_EVENT_NAME=$GITHUB_EVENT_NAME"
+          echo "GITHUB_REF=$GITHUB_REF"
+          echo "GITHUB_REPOSITORY=$GITHUB_REPOSITORY"
+
+      - name: If PR event, show PR head repo (non-sensitive)
+        if: ${{ github.event_name == 'pull_request' }}
+        run: |
+          echo "This is a pull_request event"
+          # $GITHUB_EVENT_PATH contains the event JSON
+          jq -r .pull_request.head.repo.full_name $GITHUB_EVENT_PATH || true
+
+      - name: Check secrets presence (no values printed)
+        run: |
+          echo "== Checking presence of secrets =="
+          if [ -z "${{ secrets.AWS_ACCESS_KEY_ID }}" ]; then
+            echo "MISSING: AWS_ACCESS_KEY_ID"
+          else
+            echo "PRESENT: AWS_ACCESS_KEY_ID"
+          fi
+          if [ -z "${{ secrets.AWS_SECRET_ACCESS_KEY }}" ]; then
+            echo "MISSING: AWS_SECRET_ACCESS_KEY"
+          else
+            echo "PRESENT: AWS_SECRET_ACCESS_KEY"
+          fi
+          if [ -z "${{ secrets.AWS_REGION }}" ]; then
+            echo "NOTE: AWS_REGION secret is MISSING (will use us-west-1 if configured later)"
+          else
+            echo "PRESENT: AWS_REGION (value will not be printed)"
+          fi
+
+      - name: Attempt to configure AWS credentials (will reveal success/failure)
+        id: cfg
         uses: aws-actions/configure-aws-credentials@v2
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-west-1
 
-      - name: Check env vars existence (no secret values printed)
-        shell: bash
+      - name: Check environment variables after configure (no secrets printed)
         run: |
-          echo "== Check AWS env vars set =="
+          echo "== After configure-aws-credentials =="
           if [ -z "${AWS_ACCESS_KEY_ID:-}" ]; then
-            echo "ERROR: AWS_ACCESS_KEY_ID is NOT set"
-            exit 1
+            echo "ENV: AWS_ACCESS_KEY_ID is NOT set in runner environment"
           else
-            echo "OK: AWS_ACCESS_KEY_ID is set"
+            echo "ENV: AWS_ACCESS_KEY_ID is set in runner environment (value hidden)"
           fi
           if [ -z "${AWS_SECRET_ACCESS_KEY:-}" ]; then
-            echo "ERROR: AWS_SECRET_ACCESS_KEY is NOT set"
-            exit 1
+            echo "ENV: AWS_SECRET_ACCESS_KEY is NOT set in runner environment"
           else
-            echo "OK: AWS_SECRET_ACCESS_KEY is set"
+            echo "ENV: AWS_SECRET_ACCESS_KEY is set in runner environment (value hidden)"
           fi
-          echo "AWS_REGION=${AWS_REGION:-<not set>}"  # region value printed (safe)
-      - name: Verify caller identity
-        run: |
-          aws sts get-caller-identity
-      - name: Try S3 list (may fail if user lacks S3 perms)
-        run: |
-          aws s3 ls || true
+          echo "ENV: AWS_REGION=${AWS_REGION:-<unset>}"
+          echo "Attempt aws sts get-caller-identity (may fail if keys invalid or no perms):"
+          aws sts get-caller-identity || echo "aws sts get-caller-identity failed"
