@@ -1,0 +1,42 @@
+name: Deploy with AWS access keys (CI)
+
+on:
+  push:
+    branches: [ main ]
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (access keys)
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Verify caller identity
+        run: |
+          aws sts get-caller-identity
+
+      # 示例 1: 同步静态站点到 S3（取消注释并替换桶名以使用）
+      #- name: Sync to S3
+      #  run: |
+      #    aws s3 sync ./public s3://your-bucket-name --delete --acl public-read
+
+      # 示例 2: Build and push Docker image to ECR (取消注释并替换 ACCOUNT_ID/REPO)
+      #- name: Login to ECR
+      #  run: |
+      #    aws ecr get-login-password --region ${{ secrets.AWS_REGION }} | docker login --username AWS --password-stdin 123456789012.dkr.ecr.us-east-1.amazonaws.com
+      #
+      #- name: Build, tag and push image
+      #  run: |
+      #    IMAGE_URI=123456789012.dkr.ecr.us-east-1.amazonaws.com/my-service
+      #    docker build -t $IMAGE_URI:${GITHUB_SHA::8} .
+      #    docker push $IMAGE_URI:${GITHUB_SHA::8}
